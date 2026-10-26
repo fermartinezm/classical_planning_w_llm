@@ -1,0 +1,7 @@
+# Keep Unix line endings for Axis 1 files and shell scripts, so Windows git and WSL git
+# see the same files (CRLF breaks bash scripts in WSL).
+*.sh text eol=lf
+axis1/** text eol=lf
+.gitignore text eol=lf
+*.png binary
+*.pdf binary
