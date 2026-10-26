@@ -219,3 +219,32 @@ SUITES = {
         f"{AUTOSCALE}/zenotravel/example-static.out",
     )
 }
+
+
+# Axis 1 (obfuscation): register benchmarks/obfuscated/<level>/training/<domain> as
+# suites named "<domain>-<level>", e.g. --domain blocksworld-L1. They appear only after
+# running `python -m axis1.obfuscate`. The prompt gets the obfuscated domain name.
+def _register_obfuscated_suites():
+    import json
+    import os
+
+    root = "/".join([BENCHMARKS, "obfuscated"])
+    for level in ["L1", "L2", "L3"]:
+        mappings = "/".join([root, level, "mappings"])
+        if not os.path.isdir(mappings):
+            continue
+        for domain in sorted(os.listdir(mappings)):
+            with open("/".join([mappings, domain, "mapping.json"])) as f:
+                name = json.load(f)["obfuscated_domain_name"]
+            base = "/".join([root, level, "training", domain])
+            SUITES[f"{domain}-{level}"] = DomainSuite(
+                name,
+                f"{base}/domain.pddl",
+                f"{base}/p01.pddl",
+                f"{base}/p99.pddl",
+                f"{base}/example-state.out",
+                f"{base}/example-static.out",
+            )
+
+
+_register_obfuscated_suites()
