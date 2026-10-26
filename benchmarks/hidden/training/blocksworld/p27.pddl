@@ -1,0 +1,26 @@
+;; ltz9atsn=8, kfs6vfpt=omjbcp4e/ag1ol73d, u26192k4=27, fijoyjne=54
+
+(define (problem rcd9si5g)
+ (:domain r9oudocu)
+ (:objects qnupqzit n6qiwepx hej8cx9j rerw6z8v i8bzbf1i gbtyzmep l5nwqvrr soxlta8i sk28t7a9 - object)
+ (:init 
+    (hxtpdpff)
+    (dhjk1eyy qnupqzit)
+    (x272hpoe qnupqzit gbtyzmep)
+    (x272hpoe gbtyzmep n6qiwepx)
+    (x272hpoe n6qiwepx l5nwqvrr)
+    (x272hpoe l5nwqvrr soxlta8i)
+    (x272hpoe soxlta8i i8bzbf1i)
+    (x272hpoe i8bzbf1i rerw6z8v)
+    (x272hpoe rerw6z8v hej8cx9j)
+    (xk87au5b hej8cx9j))
+ (:goal  (and 
+    (dhjk1eyy gbtyzmep)
+    (x272hpoe gbtyzmep n6qiwepx)
+    (x272hpoe n6qiwepx hej8cx9j)
+    (x272hpoe hej8cx9j soxlta8i)
+    (x272hpoe soxlta8i l5nwqvrr)
+    (x272hpoe l5nwqvrr i8bzbf1i)
+    (x272hpoe i8bzbf1i rerw6z8v)
+    (x272hpoe rerw6z8v qnupqzit)
+    (xk87au5b qnupqzit))))

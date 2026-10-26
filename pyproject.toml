@@ -1,0 +1,13 @@
+[project]
+name = "llm-heuristics"
+version = "0.1.0"
+description = "Using LLMs to learn heuristics for classical planning"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1.8",
+    "google-genai>=1.11.0",
+    "lab>=8.4",
+    "openai>=1.61.1",
+    "pandas>=2.2.3"
+]

@@ -1,0 +1,61 @@
+from fnmatch import fnmatch
+from heuristics.heuristic_base import Heuristic
+
+def get_parts(fact):
+    """Extract the components of a PDDL fact by removing parentheses and splitting the string."""
+    return fact[1:-1].split()
+
+def match(fact, *args):
+    """
+    Check if a PDDL fact matches a given pattern.
+
+    - `fact`: The complete fact as a string, e.g., "(on b1 b2)".
+    - `args`: The expected pattern (wildcards `*` allowed).
+    - Returns `True` if the fact matches the pattern, else `False`.
+    """
+    parts = get_parts(fact)
+    return all(fnmatch(part, arg) for part, arg in zip(parts, args))
+
+class blocksworldHeuristic(Heuristic):
+    """
+    A domain-dependent heuristic for the Blocksworld domain.
+
+    # Summary
+    This heuristic estimates the number of actions needed to reach the goal state
+    by counting the number of goal predicates that are not satisfied in the current state.
+    It assumes that each unsatisfied goal predicate will require at least one action to be satisfied.
+    This is a simple admissible heuristic, also known as the "count-goals" heuristic.
+
+    # Assumptions:
+    - Each unsatisfied goal predicate requires at least one action to be satisfied.
+    - Ignores dependencies between goal predicates.
+    - Assumes all goal predicates are equally important and independent.
+
+    # Heuristic Initialization
+    - Extracts the goal predicates from the task definition.
+
+    # Step-By-Step Thinking for Computing Heuristic
+    1. Initialize the heuristic value to 0.
+    2. Iterate through each goal predicate in the task definition.
+    3. For each goal predicate, check if it is satisfied in the current state.
+    4. If a goal predicate is not satisfied in the current state, increment the heuristic value by 1.
+    5. Return the total heuristic value, which represents the estimated number of actions
+       needed to satisfy all goal predicates.
+    """
+
+    def __init__(self, task):
+        """
+        Initialize the heuristic by extracting the goal predicates from the task.
+        """
+        self.goals = task.goals
+
+    def __call__(self, node):
+        """
+        Estimate the number of actions needed to reach the goal state from the current state.
+        """
+        state = node.state
+        heuristic_value = 0
+        for goal in self.goals:
+            if goal not in state:
+                heuristic_value += 1
+        return heuristic_value
