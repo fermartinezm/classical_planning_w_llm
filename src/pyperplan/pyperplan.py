@@ -38,6 +38,7 @@ SEARCHES = {
     "astar": search.astar_search,
     "wastar": search.weighted_astar_search,
     "gbf": search.greedy_best_first_search,
+    "gbf_alt": search.greedy_best_first_alternation_search,
     "gbfs_early_goal_test": search.gbfs_early_goal_test,
     "gbfs_early_goal_test_int": search.gbfs_early_goal_test_int,
     "bfs": search.breadth_first_search,
@@ -179,15 +180,18 @@ def search_plan(
     problem = _parse(domain_file, problem_file)
     task = _ground(problem)
     heuristic = None
-    if not heuristic_class is None:
-        heuristic = heuristic_class(task)
+    if heuristic_class is not None:
+        if isinstance(heuristic_class, list):
+            heuristic = [cls(task) for cls in heuristic_class]
+        else:
+            heuristic = heuristic_class(task)
     search_start_time = time.process_time()
     if use_preferred_ops and isinstance(heuristic, heuristics.hFFHeuristic):
         solution = _search(task, search, heuristic, use_preferred_ops=True)
     else:
         solution = _search(task, search, heuristic)
-    logging.info("Search time: {:.2f}".format(time.process_time() - search_start_time))
-    logging.info("Total time: {:.2f}".format(time.process_time() - total_start_time))
+    logging.info("Search time: {:.4f}".format(time.process_time() - search_start_time))
+    logging.info("Total time: {:.4f}".format(time.process_time() - total_start_time))
     return solution
 
 
@@ -240,6 +244,11 @@ def main():
         help="Select a search algorithm from {}".format(search_names),
         default="bfs",
     )
+    argparser.add_argument(
+        "--plan-file",
+        default=None,
+        help="Optional explicit path for writing the output .soln plan file (prevents parallel race conditions).",
+    )
     args = argparser.parse_args()
 
     logging.basicConfig(
@@ -267,9 +276,25 @@ def main():
 
     search = SEARCHES[args.search]
     from pathlib import Path
-    if Path(args.heuristic).is_file():
+    if "," in args.heuristic:
+        heuristic_paths = [p.strip() for p in args.heuristic.split(",") if p.strip()]
+        heuristic = []
+        for hp in heuristic_paths:
+            if Path(hp).is_file():
+                module = tools.import_python_file(hp)
+                cls_match = [
+                    getattr(module, cls)
+                    for cls in dir(module)
+                    if cls.endswith("Heuristic")
+                    and cls != "Heuristic"
+                    and not cls.startswith("_")
+                ][0]
+                heuristic.append(cls_match)
+            else:
+                heuristic.append(HEURISTICS[hp])
+        search = SEARCHES["gbf_alt"]
+    elif Path(args.heuristic).is_file():
         with open(args.heuristic, "r") as f:
-            heuristic = f.read()
             module = tools.import_python_file(args.heuristic)
             heuristic = [
                     getattr(module, cls)
@@ -287,7 +312,10 @@ def main():
         heuristic = None
 
     logging.info("using search: %s" % search.__name__)
-    logging.info("using heuristic: %s" % (heuristic.__name__ if heuristic else None))
+    if isinstance(heuristic, list):
+        logging.info("using heuristics: %s" % ([h.__name__ for h in heuristic]))
+    else:
+        logging.info("using heuristic: %s" % (heuristic.__name__ if heuristic else None))
     use_preferred_ops = args.heuristic == "hffpo"
     solution = search_plan(
         args.domain,
@@ -300,7 +328,7 @@ def main():
     if solution is None:
         logging.warning("No solution could be found")
     else:
-        solution_file = args.problem + ".soln"
+        solution_file = args.plan_file if args.plan_file else (args.problem + ".soln")
         logging.info("Plan length: %s" % len(solution))
         _write_solution(solution, solution_file)
         validate_solution(args.domain, args.problem, solution_file)

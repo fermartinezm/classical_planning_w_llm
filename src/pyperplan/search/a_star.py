@@ -194,3 +194,71 @@ def astar_search(
     logging.info("No operators left. Task unsolvable.")
     logging.info("%d Nodes expanded" % expansions)
     return None
+
+
+def greedy_best_first_alternation_search(task, heuristics, use_relaxed_plan=False):
+    """
+    LAMA-style open-list alternation (round-robin over multiple open lists) for GBFS.
+    Accepts either a list of heuristic instances or a single heuristic instance.
+    """
+    if not isinstance(heuristics, (list, tuple)):
+        heuristics = [heuristics]
+
+    num_lists = len(heuristics)
+    open_lists = [[] for _ in range(num_lists)]
+    state_cost = {task.initial_state: 0}
+    node_tiebreaker = 0
+
+    root = searchspace.make_root_node(task.initial_state)
+    init_hs = []
+    for i, heur in enumerate(heuristics):
+        h_val = heur(root)
+        init_hs.append(h_val)
+        if h_val != float("inf"):
+            heapq.heappush(open_lists[i], ordered_node_greedy_best_first(root, h_val, node_tiebreaker))
+
+    logging.info("Initial h value: %f" % (min(init_hs) if init_hs else float("inf")))
+
+    expansions = 0
+    list_idx = 0
+
+    while any(open_lists):
+        # Round-robin selection of the next non-empty open list
+        for _ in range(num_lists):
+            q = open_lists[list_idx]
+            list_idx = (list_idx + 1) % num_lists
+            if q:
+                break
+        else:
+            break
+
+        (_f, h, _tie, pop_node) = heapq.heappop(q)
+        pop_state = pop_node.state
+
+        if state_cost.get(pop_state, float("inf")) == pop_node.g:
+            expansions += 1
+            if task.goal_reached(pop_state):
+                logging.info("Goal reached. Start extraction of solution.")
+                logging.info("%d Nodes expanded" % expansions)
+                return pop_node.extract_solution()
+
+            for op, succ_state in task.get_successor_states(pop_state):
+                succ_node = searchspace.make_child_node(pop_node, op, succ_state)
+                old_succ_g = state_cost.get(succ_state, float("inf"))
+                if succ_node.g < old_succ_g:
+                    any_finite = False
+                    node_tiebreaker += 1
+                    for i, heur in enumerate(heuristics):
+                        h_succ = heur(succ_node)
+                        if h_succ != float("inf"):
+                            any_finite = True
+                            heapq.heappush(
+                                open_lists[i],
+                                ordered_node_greedy_best_first(succ_node, h_succ, node_tiebreaker),
+                            )
+                    if any_finite:
+                        state_cost[succ_state] = succ_node.g
+
+    logging.info("No operators left. Task unsolvable.")
+    logging.info("%d Nodes expanded" % expansions)
+    return None
