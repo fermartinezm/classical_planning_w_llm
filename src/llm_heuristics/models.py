@@ -36,10 +36,39 @@ def sanitize_llm_answer(answer) -> str:
 
 
 def get_model_id(model, available_models):
-    try:
+    if model in available_models:
         return available_models[model]
-    except KeyError:
-        raise ValueError(f"Model {model} is not supported by the chosen framework. Choose one of the following: {list(available_models.keys())}") from None
+    # Allow direct model IDs (e.g. open-weight models on Ollama / OpenRouter / Groq)
+    return model
+
+
+def run_openai_compatible(model_name, prompt, temperature, top_p, base_url=None, api_key=None):
+    """Run any OpenAI-compatible endpoint (Ollama, Groq, OpenRouter, vLLM, Together, etc.)."""
+    resolved_base_url = (
+        base_url
+        or os.getenv("OPENAI_BASE_URL")
+        or "http://localhost:11434/v1"
+    )
+    resolved_api_key = (
+        api_key
+        or os.getenv("OPENAI_COMPATIBLE_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or "ollama"
+    )
+    client = OpenAI(
+        base_url=resolved_base_url,
+        api_key=resolved_api_key,
+    )
+    completion = client.chat.completions.create(
+        model=model_name,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=temperature,
+        top_p=top_p,
+        stream=False,
+    )
+    logging.info("LLM Usage:")
+    print(completion.usage)
+    return completion.choices[0].message.content or ""
 
 
 def run_gemini(model_name, prompt, temperature, top_p):

@@ -88,4 +88,11 @@ def get_peak_memory_in_kb():
                     return int(parts[1])
     except OSError:
         pass
+    try:
+        import resource
+        ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # On macOS (darwin), ru_maxrss is in bytes; on Linux it is in kilobytes.
+        return int(ru // 1024) if sys.platform == "darwin" else int(ru)
+    except Exception:
+        pass
     raise Warning("warning: could not determine peak memory")
