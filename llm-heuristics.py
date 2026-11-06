@@ -159,8 +159,9 @@ def main(domain, model, framework, base_url, suite_dir, num_candidates, output_d
         os.makedirs(output_dir, exist_ok=True)
 
     for idx in range(1, num_candidates + 1):
+        target_dir = output_dir or str(Path(heuristic_file).parent or Path("."))
         target_file = (
-            os.path.join(output_dir, f"{domain}{idx}_10.py")
+            os.path.join(target_dir, f"{domain}{idx}_{num_candidates}.py")
             if (output_dir or num_candidates > 1)
             else heuristic_file
         )

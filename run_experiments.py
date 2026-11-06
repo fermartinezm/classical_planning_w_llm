@@ -593,8 +593,19 @@ def main() -> None:
                 cid = Path(info["domains"][domain]).stem.replace(domain, "")
                 cands = [(cid, str(hfile))]
             elif spec["mode"] == "single-heur":
-                cid = "alt" if "," in spec["heur"] else Path(spec["heur"]).stem
-                cands = [(cid, spec["heur"])]
+                raw_heur = spec["heur"]
+                if "," in raw_heur:
+                    resolved_parts = [
+                        str(Path(p.strip()).resolve()) if Path(p.strip()).exists() else p.strip()
+                        for p in raw_heur.split(",")
+                        if p.strip()
+                    ]
+                    cid = "alt"
+                    h_resolved = ",".join(resolved_parts)
+                else:
+                    cid = Path(raw_heur).stem
+                    h_resolved = str(Path(raw_heur).resolve()) if Path(raw_heur).exists() else raw_heur
+                cands = [(cid, h_resolved)]
             elif spec["mode"] == "candidate-dir":
                 found = discover_candidate_files(spec["dir"], domain, max_candidates=spec["max_cands"])
                 cands = [(cid, str(p)) for cid, p in found]

@@ -17,7 +17,7 @@ import glob
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import matplotlib
 matplotlib.use("Agg")
