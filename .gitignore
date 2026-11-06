@@ -1,0 +1,55 @@
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Secrets & environment variables (API keys)
+.env
+.env.*
+!.env.example
+
+# Planner temporary & solution outputs
+*.soln
+sas_plan*
+output.sas
+downward.tmp.*
+experiments/data/
+
+# Smoke test & local scratch outputs (keep committed member results/*.jsonl tracked)
+results/smoke_test.jsonl
+new-heuristic.py
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.synctex.gz
+*.toc
+
+# macOS / OS / Editor files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.vscode/
+.idea/
+*.swp
+*.swo
+
