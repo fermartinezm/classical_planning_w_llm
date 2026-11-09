@@ -53,3 +53,8 @@ new-heuristic.py
 *.swp
 *.swo
 
+
+# Axis 1: obfuscated benchmarks are deterministic and rebuilt with obfuscate.py (~700 MB)
+benchmarks/obfuscated/
+logs/
+axis1_results_*.zip
