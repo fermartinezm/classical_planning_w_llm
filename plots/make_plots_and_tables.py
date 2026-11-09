@@ -17,7 +17,7 @@ import glob
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib
 matplotlib.use("Agg")
@@ -129,35 +129,61 @@ def plot_f5_cactus(records: List[Dict[str, Any]], out_dir: Path) -> Path:
     return out_file
 
 
-def plot_f1_obfuscation(records: List[Dict[str, Any]], out_dir: Path) -> Path:
-    """F1 (Member 1): Coverage per domain across L0-L3 obfuscation levels."""
+def plot_f1_obfuscation(records: List[Dict[str, Any]], out_dir: Path, axis1_model: Optional[str] = None) -> Path:
+    """F1 (Member 1): Coverage per domain across L0-L3 obfuscation levels (isolated to Axis 1 + L0 baseline)."""
     levels = ["L0", "L1", "L2", "L3"]
-    cov: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    hff_cov: Dict[str, int] = defaultdict(int)
+    # Infer primary model used in axis1-* runs if not specified (e.g. 'deepseek-v3' or 'deepseek-r1')
+    if axis1_model is None:
+        axis1_models = [
+            r["model"] for r in records
+            if str(r.get("config", "")).startswith("axis1-") and r.get("model") not in (None, "none")
+        ]
+        axis1_model = axis1_models[0] if axis1_models else "deepseek-v3"
+
+    has_explicit_axis1_l0 = any(
+        r.get("split") == "test" and r.get("obf_level") == "L0" and str(r.get("config", "")).startswith("axis1-")
+        for r in records
+    )
+    l0_fallback_configs = {"paper-v3", "paper-r1"}
+
+    solved_tasks: Dict[str, Dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    hff_tasks: Dict[str, set] = defaultdict(set)
 
     for r in records:
         if r.get("split") != "test" or not r.get("solved"):
             continue
-        if r.get("config") == "pyperplan-hff" and r.get("obf_level") == "L0":
-            hff_cov[r["domain"]] += 1
-        elif r.get("model") != "none":
-            cov[r["obf_level"]][r["domain"]] += 1
+        cfg = str(r.get("config", ""))
+        lvl = str(r.get("obf_level", "L0"))
+        dom = r["domain"]
+        task = r["task"]
+
+        if cfg == "pyperplan-hff" and lvl == "L0":
+            hff_tasks[dom].add(task)
+        elif cfg.startswith("axis1-") and (axis1_model is None or r.get("model") == axis1_model):
+            solved_tasks[lvl][dom].add(task)
+        elif (
+            not has_explicit_axis1_l0
+            and lvl == "L0"
+            and cfg in l0_fallback_configs
+            and r.get("model") == axis1_model
+        ):
+            solved_tasks["L0"][dom].add(task)
 
     fig, ax = plt.subplots(figsize=(9.0, 4.5))
     x = list(range(len(IPC2023_DOMAINS)))
     width = 0.18
     for idx, lvl in enumerate(levels):
-        vals = [cov[lvl].get(d, 0) for d in IPC2023_DOMAINS]
+        vals = [len(solved_tasks[lvl].get(d, set())) for d in IPC2023_DOMAINS]
         offsets = [pos + (idx - 1.5) * width for pos in x]
         ax.bar(offsets, vals, width=width, label=lvl)
 
-    hff_vals = [hff_cov.get(d, 0) for d in IPC2023_DOMAINS]
+    hff_vals = [len(hff_tasks.get(d, set())) for d in IPC2023_DOMAINS]
     ax.scatter(x, hff_vals, color="black", marker="D", zorder=5, label="Pyperplan h_FF (L0)")
 
     ax.set_xticks(x)
     ax.set_xticklabels(IPC2023_DOMAINS, rotation=25, ha="right")
     ax.set_ylabel("Tasks Solved (out of 30)")
-    ax.set_title("F1: Coverage by Domain Across Obfuscation Levels (L0–L3)")
+    ax.set_title(f"F1: Coverage by Domain Across Obfuscation Levels (L0–L3, {axis1_model})")
     ax.legend(fontsize=8)
     ax.grid(True, axis="y", ls=":", alpha=0.5)
     fig.tight_layout()
@@ -169,8 +195,18 @@ def plot_f1_obfuscation(records: List[Dict[str, Any]], out_dir: Path) -> Path:
 
 
 def plot_f2_scaling(records: List[Dict[str, Any]], out_dir: Path) -> Path:
-    """F2 (Member 2): Coverage vs. model + stacked bar of candidate failure taxonomy."""
-    models_seen = sorted({r["model"] for r in records if r.get("model") and r["model"] != "none"})
+    """F2 (Member 2): Coverage vs. model + stacked bar of candidate failure taxonomy (L0 only)."""
+    axis2_test_configs = {"paper-r1", "paper-v3", "paper-qwen14b"}
+    l0_records = [
+        r for r in records
+        if r.get("obf_level", "L0") == "L0"
+        and (
+            str(r.get("config", "")).startswith("axis2-")
+            or str(r.get("config", "")) in axis2_test_configs
+            or str(r.get("config", "")) == "pyperplan-hff"
+        )
+    ]
+    models_seen = sorted({r["model"] for r in l0_records if r.get("model") and r["model"] != "none"})
     if not models_seen:
         models_seen = ["deepseek-r1"]
 
@@ -180,14 +216,23 @@ def plot_f2_scaling(records: List[Dict[str, Any]], out_dir: Path) -> Path:
     x = list(range(len(models_seen)))
     solved_counts = []
     for m in models_seen:
-        m_recs = [r for r in records if r.get("model") == m and r.get("split") == "test"]
-        solved_counts.append(sum(1 for r in m_recs if r.get("solved")))
+        # Deduplicate by (domain, task) so candidate sweeps don't inflate 240-task test coverage
+        m_tasks = {
+            (r["domain"], r["task"])
+            for r in l0_records
+            if r.get("model") == m and r.get("split") == "test" and r.get("solved")
+        }
+        solved_counts.append(len(m_tasks))
 
-    ax1.plot(x, solved_counts, marker="o", lw=2.0, label="LLM Heuristic")
-    hff_solved = sum(1 for r in records if r.get("config") == "pyperplan-hff" and r.get("split") == "test" and r.get("solved"))
+    ax1.plot(x, solved_counts, marker="o", lw=2.0, label="LLM Heuristic (Selected)")
+    hff_solved = len({
+        (r["domain"], r["task"])
+        for r in records
+        if r.get("config") == "pyperplan-hff" and r.get("obf_level") == "L0" and r.get("split") == "test" and r.get("solved")
+    })
     if hff_solved > 0:
         ax1.axhline(hff_solved, color="k", ls="--", label=f"Pyperplan h_FF ({hff_solved})")
-    ax1.set_ylabel("Test Tasks Solved")
+    ax1.set_ylabel("Test Tasks Solved (out of 240)")
     ax1.set_title("F2: Coverage & Candidate Failure Taxonomy by Model")
     ax1.legend(fontsize=8)
     ax1.grid(True, ls=":", alpha=0.5)
@@ -196,7 +241,7 @@ def plot_f2_scaling(records: List[Dict[str, Any]], out_dir: Path) -> Path:
     for cat in tax_cats:
         pcts = []
         for m in models_seen:
-            m_recs = [r for r in records if r.get("model") == m]
+            m_recs = [r for r in l0_records if r.get("model") == m]
             tot = max(1, len(m_recs))
             pcts.append(100.0 * sum(1 for r in m_recs if r.get("error") == cat) / tot)
         ax2.bar(x, pcts, bottom=bottoms, width=0.5, label=cat)
@@ -215,16 +260,20 @@ def plot_f2_scaling(records: List[Dict[str, Any]], out_dir: Path) -> Path:
 
 
 def plot_f3_selection(records: List[Dict[str, Any]], out_dir: Path) -> Path:
-    """F3 (Member 3): Per-domain test coverage of candidate heuristics + selection rules."""
-    cand_cov: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    """F3 (Member 3): Per-domain test coverage of candidate heuristics + selection rules (Axis 3 only)."""
+    cand_cov: Dict[str, Dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    has_axis3 = any(str(r.get("config", "")).startswith("axis3-") for r in records)
     for r in records:
-        if r.get("split") == "test" and r.get("solved") and r.get("model") != "none":
-            cand_cov[r["domain"]][str(r["candidate_id"])] += 1
+        cfg = str(r.get("config", ""))
+        if has_axis3 and not cfg.startswith("axis3-"):
+            continue
+        if r.get("split") == "test" and r.get("obf_level", "L0") == "L0" and r.get("solved") and r.get("model") != "none":
+            cand_cov[r["domain"]][str(r["candidate_id"])].add(r["task"])
 
     fig, ax = plt.subplots(figsize=(8.5, 4.5))
     for i, dom in enumerate(IPC2023_DOMAINS):
         c_map = cand_cov.get(dom, {})
-        ys = list(c_map.values())
+        ys = [len(tasks) for tasks in c_map.values()]
         xs = [i] * len(ys)
         if ys:
             ax.scatter(xs, ys, alpha=0.6, color="steelblue", s=25, label="Candidate" if i == 0 else None)
