@@ -427,6 +427,27 @@ def rename_text(text: str, m: Dict[str, str]) -> str:
     return IDENT_RE.sub(lambda mt: m.get(mt.group(0).lower(), mt.group(0)), text)
 
 
+# --------------------------------------------------------------------------- verify
+def verify_level(src: Path, out_root: Path, level_dir: str, domain: str) -> List[str]:
+    """Leak check: no original schema name (predicate, action, type, constant, domain name)
+    may survive in the obfuscated files the LLM sees (domain, p01, p99, example-*.out).
+    Only meaningful for L1/L2 (L3 may legitimately reuse a word shared by two domains)."""
+    sym, _ = load_symbols(src, domain)
+    schema = {s for s in sym.order
+              if sym.cat[s] in ("predicate", "action", "type", "constant", "domain")
+              and len(s) > 2 and not s.startswith("?")}
+    tdir = out_root / level_dir / "training" / domain
+    leaks = []
+    for name in ("domain.pddl", "p01.pddl", "p99.pddl", "example-state.out", "example-static.out"):
+        f = tdir / name
+        if not f.is_file():
+            continue
+        words = {w.lower() for w in IDENT_RE.findall(f.read_text(encoding="utf-8"))}
+        for w in sorted(words & schema):
+            leaks.append(f"{name}: '{w}'")
+    return leaks
+
+
 # --------------------------------------------------------------------------- driver
 def load_symbols(src: Path, domain: str) -> Tuple[Symbols, Dict[Path, List[SExpr]]]:
     sym = Symbols()
@@ -521,7 +542,11 @@ def main() -> None:
             cache: Dict[str, Symbols] = {}
             for d in args.domains:
                 m = obfuscate_domain(src, out, d, level, seed, cache)
-                print(f"[{level} seed={seed}] {d:12s} renamed {len(m):4d} symbols -> {level_dir}")
+                msg = f"[{level} seed={seed}] {d:12s} renamed {len(m):4d} symbols -> {level_dir}"
+                if level in ("L1", "L2"):
+                    leaks = verify_level(src, out, level_dir.name, d)
+                    msg += "  leak check: OK" if not leaks else f"  LEAKS: {leaks[:5]}"
+                print(msg)
 
 
 if __name__ == "__main__":

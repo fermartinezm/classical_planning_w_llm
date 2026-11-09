@@ -51,11 +51,23 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PY = sys.executable
+def load_env_file(path: Path) -> None:
+    """Load KEY=VALUE lines from a local .env (git-ignored) into os.environ."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
 DOMAINS = ["blocksworld", "childsnack", "floortile", "miconic",
            "rovers", "sokoban", "spanner", "transport"]
 
@@ -116,23 +128,30 @@ def domains_of(args):
 
 # ----------------------------------------------------------------------------- steps
 def step_hffcheck(args):
+    """Step 1.2: h_FF must solve the same tasks at every level. --split train (default, cheap)
+    or --split test (the 240 test tasks, as in TEAM_GUIDE; slow: use --time-limit to cap it)."""
     levels = ["L0", "L1", "L2", "L3"] if args.level == "all" else [args.level]
     for lvl in levels:
-        print(f"[hffcheck] {lvl}")
-        run([PY, "run_experiments.py", "--preset", "pyperplan-hff", "--split", "train",
-             "--obf-level", lvl, "--seed", args.seed, "--config", f"{args.name}-hffcheck",
-             "--domains", args.domains,
-             "--benchmarks-dir", bench_dir(lvl, args.seed, "train"),
-             "--workers", args.workers, "--out", hff_out(args)])
+        print(f"[hffcheck] {lvl} ({args.split})")
+        cmd = [PY, "run_experiments.py", "--preset", "pyperplan-hff", "--split", args.split,
+               "--obf-level", lvl, "--seed", args.seed, "--config", f"{args.name}-hffcheck",
+               "--domains", args.domains,
+               "--benchmarks-dir", bench_dir(lvl, args.seed, args.split),
+               "--workers", args.workers, "--out", hff_out(args)]
+        if args.time_limit:
+            cmd += ["--time-limit", args.time_limit]
+        run(cmd)
     # summary
     cov = {}
     with open(hff_out(args), encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
+            if r.get("split") != args.split:
+                continue
             key = (r["obf_level"], r["domain"])
             cov.setdefault(key, 0)
             cov[key] += int(bool(r["solved"]))
-    print("\nh_FF coverage on training tasks (20/domain):")
+    print(f"\nh_FF coverage on {args.split} tasks:")
     print(f"{'domain':12s} " + " ".join(f"{l:>4s}" for l in ["L0", "L1", "L2", "L3"]))
     for d in DOMAINS:
         print(f"{d:12s} " + " ".join(f"{cov.get((l, d), '-'):>4}" for l in ["L0", "L1", "L2", "L3"]))
@@ -153,12 +172,21 @@ def step_gen(args):
         if args.level != "L0":
             cmd += ["--suite-dir", bench_dir(args.level, args.seed, "train") / domain]
         log = logdir / f"gen_{level_tag(args.level, args.seed)}_{args.tag}_{domain}.log"
-        for attempt in range(1, 4):           # retries resume: existing files are skipped
+        for attempt in range(1, args.retries + 1):   # retries resume: existing files are skipped
             rc = run(cmd, log)
             have = len(list(out.glob(f"{domain}*_{args.n}.py")))
             if have >= args.n:
                 break
-            print(f"  [gen] {domain}: {have}/{args.n} candidates after attempt {attempt} (rc={rc}), retrying")
+            tail = log.read_text(encoding="utf-8", errors="replace")[-3000:]
+            if "NOT_FOUND" in tail or "API key not valid" in tail or "PERMISSION_DENIED" in tail:
+                print(f"  [gen] {domain}: fatal API error (wrong model name or key), see {log}")
+                break
+            if "per day" in tail or "Insufficient Balance" in tail:
+                print(f"  [gen] {domain}: daily quota / balance exhausted, see {log}")
+                break
+            wait = min(60 * attempt, 300)       # rate limits on free tiers (429)
+            print(f"  [gen] {domain}: {have}/{args.n} after attempt {attempt} (rc={rc}), retry in {wait}s")
+            time.sleep(wait)
         return domain, len(list(out.glob(f"{domain}*_{args.n}.py")))
 
     doms = domains_of(args)
@@ -178,6 +206,9 @@ def step_train(args):
 
 
 def step_select(args):
+    if not train_out(args).is_file():
+        print(f"[select] {train_out(args).name} does not exist (no training runs): skipping")
+        return
     sys.path.insert(0, str(ROOT))
     from run_experiments import select_best_candidates  # noqa: E402
 
@@ -222,6 +253,7 @@ def step_test(args):
 
 
 def main():
+    load_env_file(ROOT / ".env")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("step", choices=["hffcheck", "gen", "train", "select", "test", "all"])
     ap.add_argument("--level", default="all", help="L0, L1, L2, L3 (hffcheck also accepts 'all')")
@@ -236,6 +268,9 @@ def main():
     ap.add_argument("-n", type=int, default=10, help="Candidates per domain")
     ap.add_argument("--workers", type=int, default=4, help="Parallel planner runs")
     ap.add_argument("--gen-parallel", type=int, default=8, help="Domains generated in parallel")
+    ap.add_argument("--split", default="train", choices=["train", "test"], help="hffcheck only")
+    ap.add_argument("--time-limit", type=float, default=None, help="hffcheck only: cap per task (s)")
+    ap.add_argument("--retries", type=int, default=8, help="Generation attempts per domain (waits between them)")
     args = ap.parse_args()
 
     if args.step != "hffcheck" and args.level not in ("L0", "L1", "L2", "L3"):
