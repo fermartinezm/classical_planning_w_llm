@@ -103,7 +103,8 @@ def train_out(args) -> Path:
 
 
 def test_out(args) -> Path:
-    return ROOT / "results" / f"{args.owner}_{args.name}_test.jsonl"
+    # one test file per model tag, e.g. results/member1_axis1_test_g5mini.jsonl
+    return ROOT / "results" / f"{args.owner}_{args.name}_test_{args.tag}.jsonl"
 
 
 def sel_out(args) -> Path:

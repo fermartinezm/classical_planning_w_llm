@@ -51,33 +51,48 @@ def md_table(header, rows):
 
 
 # ----------------------------------------------------------------------------- sections
-def hff_section(recs):
+def hff_section(recs, base_recs=()):
     if not recs:
         return "## h_FF sanity check\n\n(no results/member1_hff_check.jsonl yet)\n"
-    cov = defaultdict(int)
-    n = defaultdict(int)
-    exp = {}
-    for r in recs:
-        k = (r["obf_level"], r["domain"])
-        n[k] += 1
-        cov[k] += int(bool(r["solved"]))
-        if r["solved"]:
-            exp[(r["obf_level"], r["domain"], r["task"])] = r["expansions"]
-    rows = []
-    for d in DOMAINS:
-        row = [d] + [f"{cov[(l, d)]}/{n[(l, d)]}" if n[(l, d)] else "-" for l in LEVELS]
-        for l in LEVELS[1:]:
-            pairs = [(exp[("L0", d, t)], exp[(l, d, t)]) for (lv, dd, t) in exp
-                     if lv == l and dd == d and ("L0", d, t) in exp]
-            same = sum(1 for a, b in pairs if a == b)
-            row.append(f"{same}/{len(pairs)}" if pairs else "-")
-        rows.append(row)
-    header = ["domain"] + [f"solved {l}" for l in LEVELS] + [f"same exp. {l}" for l in LEVELS[1:]]
-    return ("## h_FF sanity check (training tasks, 60 s)\n\n"
+    m4 = defaultdict(int)
+    for r in base_recs:
+        if r.get("config") == "pyperplan-hff" and r.get("obf_level", "L0") == "L0" \
+                and r.get("split") == "test" and r.get("solved"):
+            m4[r["domain"]] += 1
+    out = []
+    for split in ("train", "test"):
+        rs = [r for r in recs if r.get("split") == split]
+        if not rs:
+            continue
+        cov = defaultdict(int)
+        n = defaultdict(int)
+        exp = {}
+        for r in rs:
+            k = (r["obf_level"], r["domain"])
+            n[k] += 1
+            cov[k] += int(bool(r["solved"]))
+            if r["solved"]:
+                exp[(r["obf_level"], r["domain"], r["task"])] = r["expansions"]
+        rows = []
+        for d in DOMAINS:
+            row = [d] + [f"{cov[(l, d)]}/{n[(l, d)]}" if n[(l, d)] else "-" for l in LEVELS]
+            for l in LEVELS[1:]:
+                pairs = [(exp[("L0", d, t)], exp[(l, d, t)]) for (lv, dd, t) in exp
+                         if lv == l and dd == d and ("L0", d, t) in exp]
+                same = sum(1 for a, b in pairs if a == b)
+                row.append(f"{same}/{len(pairs)}" if pairs else "-")
+            if split == "test" and m4:
+                row.append(m4.get(d, 0))
+            rows.append(row)
+        header = ["domain"] + [f"solved {l}" for l in LEVELS] + [f"same exp. {l}" for l in LEVELS[1:]]
+        if split == "test" and m4:
+            header.append("Member 4 L0")
+        out.append(f"### {split} split\n\n" + md_table(header, rows) + "\n")
+    return ("## h_FF sanity check\n\n"
             "Renaming must not change what h_FF solves. 'same exp.' counts tasks whose number "
             "of expanded nodes is identical to L0; differences come only from tie-breaking, "
             "which depends on names (L1, L3) and on the order of actions and facts (L2).\n\n"
-            + md_table(header, rows) + "\n")
+            + "\n".join(out))
 
 
 def candidate_section(recs):
@@ -86,12 +101,12 @@ def candidate_section(recs):
         return "## Candidates on training tasks\n\n(no training results yet)\n", {}
     by = defaultdict(lambda: defaultdict(list))  # (level, seed) -> (domain, cand) -> recs
     for r in recs:
-        by[(r["obf_level"], int(r.get("seed", 1)))][(r["domain"], str(r["candidate_id"]))].append(r)
+        by[(r.get("model", "?"), r["obf_level"], int(r.get("seed", 1)))][(r["domain"], str(r["candidate_id"]))].append(r)
 
     rows_cov, rows_fail, shares = [], [], {}
     for key in sorted(by):
-        lvl, seed = key
-        label = lvl if seed == 1 else f"{lvl} (seed {seed})"
+        model, lvl, seed = key
+        label = f"{model} {lvl}" if seed == 1 else f"{model} {lvl} (seed {seed})"
         cands = by[key]
         # coverage of the best candidate per domain
         best = {}
@@ -133,15 +148,15 @@ def test_section(test_recs, base_recs):
         if not str(r.get("config", "")).startswith("axis1"):
             continue
         seed = int(r.get("seed", 1))
-        key = (r["obf_level"], seed)
+        key = (r.get("model", "?"), r["obf_level"], seed)
         cov[key][r["domain"]] += int(bool(r["solved"]))
         cov[key]["_n_" + r["domain"]] += 1
     if not cov:
         return "## Test coverage\n\n(no results/member1_axis1_test.jsonl yet)\n", cov, hff
     rows = []
     for key in sorted(cov):
-        lvl, seed = key
-        label = lvl if seed == 1 else f"{lvl} (seed {seed})"
+        model, lvl, seed = key
+        label = f"{model} {lvl}" if seed == 1 else f"{model} {lvl} (seed {seed})"
         vals = [cov[key][d] if cov[key].get("_n_" + d) else "-" for d in DOMAINS]
         total = sum(v for v in vals if isinstance(v, int))
         rows.append([label] + vals + [total])
@@ -152,7 +167,7 @@ def test_section(test_recs, base_recs):
 
 
 def latex_table(cov, hff):
-    keys = [k for k in sorted(cov) if k[1] == 1]
+    keys = [k for k in sorted(cov) if k[2] == 1]
     if not keys:
         return ""
     short = {"blocksworld": "Blocks", "childsnack": "Childsn.", "floortile": "Floort.",
@@ -162,7 +177,7 @@ def latex_table(cov, hff):
              "Level & " + " & ".join(short[d] for d in DOMAINS) + r" & Total \\", r"\midrule"]
     for k in keys:
         vals = [cov[k].get(d, 0) for d in DOMAINS]
-        lines.append(f"{k[0]} & " + " & ".join(map(str, vals)) + f" & {sum(vals)} " + r"\\")
+        lines.append(f"{k[0]} {k[1]} & " + " & ".join(map(str, vals)) + f" & {sum(vals)} " + r"\\")
     if hff:
         vals = [hff.get(d, 0) for d in DOMAINS]
         lines.append(r"\midrule")
@@ -200,8 +215,8 @@ def fig_failures(shares):
 
 def fig_seeds(cov):
     by_level = defaultdict(dict)
-    for (lvl, seed), c in cov.items():
-        by_level[lvl][seed] = sum(c.get(d, 0) for d in DOMAINS)
+    for (model, lvl, seed), c in cov.items():
+        by_level[f"{model} {lvl}"][seed] = sum(c.get(d, 0) for d in DOMAINS)
     multi = {l: s for l, s in by_level.items() if len(s) > 1}
     if not multi:
         return
@@ -228,12 +243,12 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     hff = load("results/member1_hff_check.jsonl")
     train = load("results/member1_axis1_train_*.jsonl")
-    test = load("results/member1_axis1_test.jsonl")
+    test = load("results/member1_axis1_test*.jsonl")
     base = load("results/member4_baselines.jsonl")
 
     parts = ["# Axis 1 results summary\n"]
     sel = ROOT / "results" / "member1_axis1_selection.json"
-    parts.append(hff_section(hff))
+    parts.append(hff_section(hff, base))
     txt, shares = candidate_section(train)
     parts.append(txt)
     if sel.is_file():
