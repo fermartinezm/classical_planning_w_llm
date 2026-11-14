@@ -1,0 +1,116 @@
+name: Run Member 4 Baselines & Plots
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/run_baselines.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  run-shard:
+    name: "${{ matrix.preset }} (${{ matrix.domains }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        preset:
+          - pyperplan-hff
+          - paper-r1
+          - paper-v3
+          - pyperplan-blind
+        domains:
+          - "blocksworld,childsnack"
+          - "floortile,miconic"
+          - "rovers,sokoban"
+          - "spanner,transport"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install click psutil matplotlib pandas
+
+      - name: Run baseline shard (60 tasks)
+        run: |
+          SAFE_DOMS=$(echo "${{ matrix.domains }}" | tr ',' '_')
+          OUT_FILE="shard_${{ matrix.preset }}_${SAFE_DOMS}.jsonl"
+          python3 run_experiments.py \
+            --preset "${{ matrix.preset }}" \
+            --domains "${{ matrix.domains }}" \
+            --split test \
+            --workers 4 \
+            --out "${OUT_FILE}"
+
+      - name: Upload shard JSONL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.preset }}-${{ strategy.job-index }}
+          path: shard_*.jsonl
+          retention-days: 14
+
+  merge-and-plot:
+    name: Merge Baselines, Generate Plots & Commit
+    needs: run-shard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install plotting dependencies
+        run: |
+          pip install --upgrade pip
+          pip install click psutil matplotlib pandas
+
+      - name: Download all shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_shards
+          pattern: shard-*
+          merge-multiple: true
+
+      - name: Merge shards into results/member4_baselines.jsonl & generate plots
+        run: |
+          mkdir -p results plots/output
+          cat downloaded_shards/shard_*.jsonl > results/member4_baselines.jsonl
+          wc -l results/member4_baselines.jsonl
+          python3 plots/obfuscation_summary.py
+          python3 plots/make_plots_and_tables.py --inputs "results/*.jsonl" --out-dir plots/output
+
+      - name: Upload final results & figures artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: member4-baselines-and-plots
+          path: |
+            results/member4_baselines.jsonl
+            plots/output/**
+          retention-days: 30
+
+      - name: Commit and push results to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          git add results/member4_baselines.jsonl plots/output/
+          git diff --staged --quiet || git commit -m "Add Member 4 240-task baseline results and updated figures F1-F5"
+          git push origin HEAD:main
