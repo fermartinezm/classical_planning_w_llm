@@ -1,0 +1,306 @@
+{
+  "axis1-L0-g5mini": {
+    "date": "2026-11-10T22:44:14",
+    "model": "gpt-5-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "1_10",
+        "train_solved": 17
+      },
+      "miconic": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "4_10",
+        "train_solved": 20
+      },
+      "sokoban": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "9_10",
+        "train_solved": 20
+      }
+    }
+  },
+  "axis1-L1-g5mini": {
+    "date": "2026-11-10T22:44:16",
+    "model": "gpt-5-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "8_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "8_10",
+        "train_solved": 19
+      },
+      "miconic": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "4_10",
+        "train_solved": 20
+      },
+      "sokoban": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "9_10",
+        "train_solved": 20
+      }
+    }
+  },
+  "axis1-L2-g5mini": {
+    "date": "2026-11-10T22:44:17",
+    "model": "gpt-5-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "10_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "7_10",
+        "train_solved": 17
+      },
+      "miconic": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "7_10",
+        "train_solved": 20
+      },
+      "sokoban": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "7_10",
+        "train_solved": 20
+      }
+    }
+  },
+  "axis1-L3-g5mini": {
+    "date": "2026-11-10T22:44:18",
+    "model": "gpt-5-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "10_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "9_10",
+        "train_solved": 19
+      },
+      "miconic": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "5_10",
+        "train_solved": 20
+      },
+      "sokoban": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "4_10",
+        "train_solved": 20
+      }
+    }
+  },
+  "axis1-L0-g41mini": {
+    "date": "2026-11-12T07:23:28",
+    "model": "gpt-4.1-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "7_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "7_10",
+        "train_solved": 18
+      },
+      "miconic": {
+        "candidate": "7_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "5_10",
+        "train_solved": 20
+      },
+      "sokoban": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "9_10",
+        "train_solved": 20
+      }
+    }
+  },
+  "axis1-L1-g41mini": {
+    "date": "2026-11-12T07:23:29",
+    "model": "gpt-4.1-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "8_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "7_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "2_10",
+        "train_solved": 17
+      },
+      "miconic": {
+        "candidate": "7_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "5_10",
+        "train_solved": 19
+      },
+      "sokoban": {
+        "candidate": "8_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "7_10",
+        "train_solved": 20
+      }
+    }
+  },
+  "axis1-L2-g41mini": {
+    "date": "2026-11-12T07:23:29",
+    "model": "gpt-4.1-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "8_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "10_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "3_10",
+        "train_solved": 17
+      },
+      "miconic": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "5_10",
+        "train_solved": 20
+      },
+      "sokoban": {
+        "candidate": "6_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "5_10",
+        "train_solved": 20
+      }
+    }
+  },
+  "axis1-L3-g41mini": {
+    "date": "2026-11-12T07:23:30",
+    "model": "gpt-4.1-mini",
+    "selected": {
+      "blocksworld": {
+        "candidate": "8_10",
+        "train_solved": 20
+      },
+      "childsnack": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "floortile": {
+        "candidate": "5_10",
+        "train_solved": 17
+      },
+      "miconic": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "rovers": {
+        "candidate": "2_10",
+        "train_solved": 20
+      },
+      "sokoban": {
+        "candidate": "8_10",
+        "train_solved": 20
+      },
+      "spanner": {
+        "candidate": "9_10",
+        "train_solved": 20
+      },
+      "transport": {
+        "candidate": "5_10",
+        "train_solved": 20
+      }
+    }
+  }
+}
