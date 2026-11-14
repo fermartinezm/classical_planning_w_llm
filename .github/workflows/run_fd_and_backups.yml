@@ -1,0 +1,245 @@
+name: Run Fast Downward Baselines & Axis 2/3 Cloud Backups
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/run_fd_and_backups.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  run-fast-downward:
+    name: "Fast Downward (${{ matrix.preset }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        preset:
+          - fd-hff
+          - fd-lama-first
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build Fast Downward & install Python deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ make
+          git clone --depth 1 https://github.com/aibasel/downward.git /tmp/downward
+          python3 /tmp/downward/build.py release
+          pip install --upgrade pip
+          pip install click psutil matplotlib pandas
+
+      - name: Run Fast Downward on 240 test tasks
+        run: |
+          OUT_FILE="shard_${{ matrix.preset }}.jsonl"
+          python3 run_experiments.py \
+            --preset "${{ matrix.preset }}" \
+            --fd-bin "/tmp/downward/fast-downward.py" \
+            --split test \
+            --workers 4 \
+            --out "${OUT_FILE}"
+
+      - name: Upload FD artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extra-fd-${{ matrix.preset }}
+          path: shard_*.jsonl
+          retention-days: 14
+
+  run-axis2-qwen14b:
+    name: "Axis 2 Qwen-14B (${{ matrix.domains }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        domains:
+          - "blocksworld,childsnack"
+          - "floortile,miconic"
+          - "rovers,sokoban"
+          - "spanner,transport"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install click psutil matplotlib pandas
+
+      - name: Run archived Qwen-14B selected heuristics (60 test tasks)
+        run: |
+          SAFE_DOMS=$(echo "${{ matrix.domains }}" | tr ',' '_')
+          python3 run_experiments.py \
+            --preset paper-qwen14b \
+            --domains "${{ matrix.domains }}" \
+            --split test \
+            --workers 4 \
+            --out "shard_qwen14b_${SAFE_DOMS}.jsonl"
+
+      - name: Upload Qwen-14B shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: extra-qwen14b-${{ strategy.job-index }}
+          path: shard_qwen14b_*.jsonl
+          retention-days: 14
+
+  run-axis3-alternation:
+    name: "Axis 3 Train + Top-3 Alternation (${{ matrix.domains }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        domains:
+          - "blocksworld,childsnack"
+          - "floortile,miconic"
+          - "rovers,sokoban"
+          - "spanner,transport"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install click psutil matplotlib pandas
+
+      - name: Evaluate R1 candidates on train (60s) & run Top-3 Alternation on test (300s)
+        run: |
+          SAFE_DOMS=$(echo "${{ matrix.domains }}" | tr ',' '_')
+          TRAIN_OUT="shard_axis3_train_${SAFE_DOMS}.jsonl"
+          ALT_OUT="shard_axis3_alt3_${SAFE_DOMS}.jsonl"
+
+          # 1. Evaluate 10 archived R1 candidates on the 20 training tasks (60s cap)
+          python3 run_experiments.py \
+            --heuristic-dir archive-heuristics/2025-03-10-deepseek-r1 \
+            --max-candidates 10 \
+            --domains "${{ matrix.domains }}" \
+            --split train \
+            --config axis3-r1-train \
+            --model deepseek-r1 \
+            --workers 4 \
+            --out "${TRAIN_OUT}"
+
+          # 2. Pick top-3 candidates per domain and run 3-way open-list alternation on test
+          python3 - << 'EOF' "${TRAIN_OUT}" "${ALT_OUT}" "${{ matrix.domains }}"
+          import subprocess, sys
+          from pathlib import Path
+          from run_experiments import select_best_candidates
+
+          train_file, alt_file, dom_csv = sys.argv[1], sys.argv[2], sys.argv[3]
+          top3_map = select_best_candidates(Path(train_file), rule="paper_rule", top_k=3)
+          r1_dir = Path("archive-heuristics/2025-03-10-deepseek-r1")
+
+          for dom in [d.strip() for d in dom_csv.split(",") if d.strip()]:
+              cids = top3_map.get(dom, [])
+              paths = [str(r1_dir / f"{dom}{cid}.py") for cid in cids if (r1_dir / f"{dom}{cid}.py").is_file()]
+              if not paths:
+                  continue
+              heur_arg = ",".join(paths)
+              print(f"[Axis3-Alt3] {dom} -> {heur_arg}", flush=True)
+              subprocess.check_call([
+                  sys.executable, "run_experiments.py",
+                  "--domains", dom,
+                  "--split", "test",
+                  "--config", "axis3-alt3",
+                  "--model", "deepseek-r1",
+                  "--heuristic", heur_arg,
+                  "--workers", "4",
+                  "--out", alt_file,
+              ])
+          EOF
+
+      - name: Upload Axis 3 shards
+        uses: actions/upload-artifact@v4
+        with:
+          name: extra-axis3-${{ strategy.job-index }}
+          path: shard_axis3_*.jsonl
+          retention-days: 14
+
+  merge-extra-and-commit:
+    name: Merge FD + Axis 2/3 Results & Commit
+    needs: [run-fast-downward, run-axis2-qwen14b, run-axis3-alternation]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install plotting dependencies
+        run: |
+          pip install --upgrade pip
+          pip install click psutil matplotlib pandas
+
+      - name: Download all extra shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: extra_shards
+          pattern: extra-*
+          merge-multiple: true
+
+      - name: Merge shards & regenerate plots
+        run: |
+          mkdir -p results plots/output
+          cat extra_shards/shard_fd-*.jsonl > results/member4_fd_baselines.jsonl || true
+          cat extra_shards/shard_qwen14b_*.jsonl > results/member2_qwen14b_test.jsonl || true
+          cat extra_shards/shard_axis3_train_*.jsonl > results/member3_axis3_train.jsonl || true
+          cat extra_shards/shard_axis3_alt3_*.jsonl > results/member3_axis3_alt3_test.jsonl || true
+          python3 plots/obfuscation_summary.py
+          python3 plots/make_plots_and_tables.py --inputs "results/*.jsonl" --out-dir plots/output
+
+      - name: Upload backup artifact bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: fd-and-axis2-axis3-results
+          path: |
+            results/member4_fd_baselines.jsonl
+            results/member2_qwen14b_test.jsonl
+            results/member3_axis3_*.jsonl
+            plots/output/**
+          retention-days: 30
+
+      - name: Commit and push results to main (with rebase retry)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            git add results/member4_fd_baselines.jsonl results/member2_qwen14b_test.jsonl results/member3_axis3_*.jsonl plots/output/
+            git diff --staged --quiet || git commit -m "Add Fast Downward baselines, Axis 2 Qwen-14B, and Axis 3 Alternation results"
+            if git push origin HEAD:main; then
+              break
+            fi
+            sleep 5
+          done

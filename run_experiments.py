@@ -354,7 +354,7 @@ def execute_single_job(job: Dict[str, Any]) -> RunResult:
                     solved=False, time=wall_time, search_time=search_time, expansions=expansions,
                     plan_len=None, mem=mem_kb, init_h=init_h, error="oom",
                 )
-            if "Solution found!" in combined and plan_len is not None:
+            if "Solution found" in combined and plan_len is not None:
                 return RunResult(
                     domain=domain, task=task_name, split=split, config=config, model=model,
                     obf_level=obf_level, seed=seed, candidate_id=candidate_id,
